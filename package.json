@@ -12,6 +12,7 @@
     "test": "vitest run",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "admin:grant": "tsx scripts/admin-grant.ts",
+    "start": "tsx api/server.ts",
     "server:dev": "nodemon",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\""
   },

@@ -3,6 +3,8 @@ import express, {
   type Response,
   type NextFunction,
 } from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import cors from "cors";
 import authRoutes from "./routes/auth.js";
 import telemetryRoutes from "./routes/telemetry.js";
@@ -14,6 +16,8 @@ import { isDatabaseConfigured } from "./lib/config.js";
 import { attachSession, requireAdmin } from "./lib/auth.js";
 
 const app: express.Application = express();
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const distDir = path.resolve(currentDir, "../dist");
 
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
@@ -33,6 +37,12 @@ app.get("/api/health", (_req: Request, res: Response): void => {
     service: "ccwebai-web",
     databaseConfigured: isDatabaseConfigured(),
   });
+});
+
+app.use(express.static(distDir));
+
+app.get(/^(?!\/api(?:\/|$)).*/, (_req: Request, res: Response): void => {
+  res.sendFile(path.join(distDir, "index.html"));
 });
 
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {

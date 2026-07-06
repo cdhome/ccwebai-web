@@ -32,6 +32,137 @@ pnpm run dev
 
 - `http://localhost:3001`
 
+## Docker 部署
+
+项目现在支持“单容器承载前端静态资源 + Express API”的部署方式：
+
+- `dist/` 由 Express 在生产模式下直接托管
+- `/api/*` 继续由同一个 Node 进程处理
+- 外层 Nginx 只需要反代到 Web 容器的 `3001` 端口
+
+### 1. 构建镜像
+
+在项目根目录执行：
+
+```bash
+docker build -t ccwebai-web:latest .
+```
+
+### 2. 启动容器
+
+最简启动方式：
+
+```bash
+docker run -d \
+  --name ccwebai-web \
+  --restart always \
+  -p 3001:3001 \
+  --env-file .env.local \
+  ccwebai-web:latest
+```
+
+默认行为：
+
+- 容器启动时自动执行 `pnpm db:migrate`
+- 之后启动 `pnpm start`
+- 站点与 API 统一监听 `3001`
+
+如果你不希望容器启动时自动跑迁移，可以加：
+
+```bash
+-e RUN_MIGRATIONS=0
+```
+
+### 3. 推荐的 docker-compose 写法
+
+如果你的 Nginx 也跑在 Docker 里，推荐把 `ccwebai-web` 和 `nginx` 放到同一个网络中。示例：
+
+```yaml
+services:
+  ccwebai-web:
+    build:
+      context: /home/work/workplace/ccwebai-web
+      dockerfile: Dockerfile
+    container_name: ccwebai-web
+    restart: always
+    env_file:
+      - /home/work/workplace/ccwebai-web/.env.local
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      RUN_MIGRATIONS: "1"
+    expose:
+      - "3001"
+    networks:
+      - nginx-network
+
+networks:
+  nginx-network:
+    external: true
+```
+
+说明：
+
+- `env_file` 直接复用你当前的 `.env.local`
+- `expose: 3001` 只暴露给 Docker 网络内部
+- 如果外层只有 Nginx 对外，通常不需要再 `ports: "3001:3001"`
+
+### 4. Nginx 反代到 Web 容器
+
+当 `ccwebai-web` 与 `nginx` 在同一个 Docker 网络时，Nginx 可以直接反代到容器名：
+
+```nginx
+server {
+    listen 80;
+    server_name ccwebai.com www.ccwebai.com;
+
+    location / {
+        proxy_pass http://ccwebai-web:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+由于前端静态页面和 `/api` 已经都在 `ccwebai-web` 容器里统一提供，Nginx 不再需要自己挂载 `dist/` 静态文件目录。
+
+### 5. 生产环境变量建议
+
+Docker 生产环境下，至少要确保这些变量正确：
+
+```env
+NODE_ENV=production
+PORT=3001
+APP_BASE_URL=https://www.ccwebai.com
+PUBLIC_SITE_URL=https://www.ccwebai.com
+DATABASE_URL=postgresql://...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=https://www.ccwebai.com/api/auth/google/callback
+ADMIN_EMAILS=you@example.com
+SESSION_SECRET=replace_with_a_long_random_string
+```
+
+### 6. 你的当前架构如何迁移到 Docker Web
+
+你现在的 Nginx 已经在 Docker 中，因此如果把 `ccwebai-web` 也 Docker 化，推荐这样调整：
+
+1. 不再把前端 `dist` 拷贝到 `/home/work/docker/nginx/html`
+2. 保留 Nginx 作为 HTTPS 入口
+3. 新增 `ccwebai-web` 容器，并加入同一个 `nginx-network`
+4. Nginx 配置改为直接 `proxy_pass http://ccwebai-web:3001`
+5. `www` 与裸域的所有请求都转给 `ccwebai-web`
+
+这样做的好处：
+
+- 前端与后端版本始终一致
+- 不再需要手动同步 `dist`
+- 不需要处理容器访问宿主机 `127.0.0.1` 的问题
+- 部署回滚更简单，只需要切镜像版本
+
 ## 环境变量
 
 复制 `.env.example` 到 `.env.local` 后再启动。
@@ -291,4 +422,3 @@ pnpm run build
 ```text
 https://www.ccwebai.com/issues/new?deviceId=<device-id>
 ```
-
