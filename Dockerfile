@@ -5,7 +5,7 @@ WORKDIR /app
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -23,7 +23,8 @@ ENV PATH="$PNPM_HOME:$PATH"
 ENV PORT=3001
 
 RUN apk add --no-cache libc6-compat \
-  && corepack enable
+  && corepack enable \
+  && corepack prepare pnpm@9.0.0 --activate
 
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod=false
