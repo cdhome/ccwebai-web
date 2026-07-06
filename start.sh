@@ -1,0 +1,1 @@
+NODE_ENV=production PORT=3001 nohup pnpm exec tsx api/server.ts &
