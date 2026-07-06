@@ -33,6 +33,7 @@ COPY --from=builder /app/dist ./dist
 COPY api ./api
 COPY shared ./shared
 COPY scripts ./scripts
+COPY migrations ./migrations
 COPY .env.example ./.env.example
 COPY docker-start.sh ./docker-start.sh
 
